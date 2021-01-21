@@ -82,6 +82,40 @@ getAssignment string ((varName,value):rest) =
     else getAssignment string rest
 getAssignment string [] = error "El nombre no se encuentra entre la lista de variables."
 
+
+getPrecedence :: Proposition -> Int
+getPrecedence proposition =
+    case proposition of
+        (Conjunction prop1 prop2) -> 7
+        (Disjunction prop1 prop2) -> 6
+        (Implication prop1 prop2) -> 5
+        (Equivalence prop1 prop2) -> 4
+        _                         -> 0 -- Just to handle the exception, precedence value as 0 is never actually used.
+
+
+
+getPrettyString ::    Proposition ->  Proposition ->  Proposition -> String     -> (Proposition -> String) -> String
+getPrettyString       proposition     subprop1        subprop2       operator      func                     =
+    let 
+        prop1Precedence = getPrecedence subprop1
+        prop2Precedence = getPrecedence subprop2
+
+        string1 = 
+            (
+                if prop1Precedence > getPrecedence proposition
+                then "("++func subprop1++")"
+                else func subprop1
+                )
+        
+        string2 = 
+            (
+                if prop2Precedence > getPrecedence proposition
+                then "("++func subprop2++")"
+                else func subprop2
+                )
+    in 
+        string1++operator++string2
+
 {-
     VARS
     Applies obtains all the different variables contained in a proposition.
@@ -250,7 +284,7 @@ fnd :: Proposition -> Proposition
     Prints a proposition in a pretty and understandable way, removing all the unnecesary parenthesis on the way.
     
     Auxiliar functions: 
-        - removeDuplicates
+        - getPrettyString
 -}
 
 bonita ::   Proposition -> String
@@ -266,33 +300,22 @@ bonita      proposition =
         let
             string = bonita proposition
         in
-            "~"++string++""
+            (
+                case proposition of
+                (Constant True)     -> "~"++string
+                (Constant False)    -> "~"++string
+                (Variable string)   -> "~"++string
+                (_)                 -> "~("++string++")"
+            )
+            
     (Conjunction proposition1 proposition2) ->  
-        let 
-            string1 = bonita proposition1
-            string2 = bonita proposition2
-        in 
-            "("++string1++" /\\ "++string2++")"
-    (Disjunction proposition1 proposition2) -> 
-        let 
-            string1 = bonita proposition1
-            string2 = bonita proposition2
-        in 
-            "("++string1++" \\/ "++string2++")"
-    (Implication proposition1 proposition2) -> 
-        let 
-            string1 = bonita proposition1
-            string2 = bonita proposition2
-        in 
-            "("++string1++" => "++string2++")"
-    (Equivalence proposition1 proposition2) -> 
-        let 
-            string1 = bonita proposition1
-            string2 = bonita proposition2
-        in 
-            "("++string1++" <=> "++string2++")"
+        getPrettyString proposition proposition1 proposition2 " /\\ " bonita
 
-    let
-        binary = showIntAtBase 2 intToDigit n ""
-    in
-        concat [[binary], func (n-1)]
+    (Disjunction proposition1 proposition2) -> 
+        getPrettyString proposition proposition1 proposition2 " \\/ " bonita
+
+    (Implication proposition1 proposition2) -> 
+        getPrettyString proposition proposition1 proposition2 " => " bonita
+
+    (Equivalence proposition1 proposition2) -> 
+        getPrettyString proposition proposition1 proposition2 " <=> " bonita
