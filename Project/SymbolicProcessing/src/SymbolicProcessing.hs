@@ -23,8 +23,8 @@ data TautologyEvaluation =  ItIs
 {-
 PROPOSITION EXAMPLE
 ( Negation ( Conjunction ( Disjunction ( Implication ( Negation ( Variable "a" ) ) ( Variable "b" ) ) ( Constant False ) ) (Equivalence ( Variable "a" ) ( Variable "c" ) ) ) )
+( Implication (Conjunction (Variable "p")(Variable "q")) (Variable "p"))
 
-( Implication (Conjunction (Variable "p")(Variable "q")) (Variable "p")))
 
 VARIABLES
 ["a","b","c"]
@@ -82,9 +82,9 @@ getAssignment string ((varName,value):rest) =
     else getAssignment string rest
 getAssignment string [] = error "El nombre no se encuentra entre la lista de variables."
 
-
+-- Returns the precedence of a given proposition operation. If doesn't have one assigned, returns precedence 0.
 getPrecedence :: Proposition -> Int
-getPrecedence proposition =
+getPrecedence    proposition =
     case proposition of
         (Conjunction prop1 prop2) -> 7
         (Disjunction prop1 prop2) -> 6
@@ -93,7 +93,7 @@ getPrecedence proposition =
         _                         -> 0 -- Just to handle the exception, precedence value as 0 is never actually used.
 
 
-
+-- Returns the pretty string of an operation, with a given operator to write, and a function to call the next iteration with.
 getPrettyString ::    Proposition ->  Proposition ->  Proposition -> String     -> (Proposition -> String) -> String
 getPrettyString       proposition     subprop1        subprop2       operator      func                     =
     let 
@@ -115,6 +115,74 @@ getPrettyString       proposition     subprop1        subprop2       operator   
                 )
     in 
         string1++operator++string2
+
+-- Determines if a proposition is a variable.
+isVariable :: Proposition -> Bool
+isVariable    (Variable _) = True
+isVariable    _            = False
+
+-- Determines if a proposition is a constant.
+isConstant :: Proposition -> Bool
+isConstant    (Constant _) = True
+isConstant    _            = False
+
+-- Negates a proposition until reaching a doble negation, variable or constant.
+exhaustiveNegate :: Proposition -> Proposition
+exhaustiveNegate    proposition  =
+    case proposition of 
+        (Conjunction prop1 prop2)   ->  Disjunction (exhaustiveNegate prop1) (exhaustiveNegate prop2)
+        (Disjunction prop1 prop2)   ->  Conjunction (exhaustiveNegate prop1) (exhaustiveNegate prop2)
+        (Implication prop1 prop2)   ->  Disjunction (exhaustiveNegate (Negation prop1)) (exhaustiveNegate prop2)
+        (Equivalence prop1 prop2)   ->  Disjunction (Conjunction (exhaustiveNegate prop1) (exhaustiveNegate prop2) ) (Negation (exhaustiveNegate prop2))
+        (Negation prop)             ->  prop
+        (Variable string)           ->  Negation (Variable string)
+        (Constant True)             ->  (Constant False)  
+        (Constant False)            ->  (Constant True) 
+
+-- Either removes the constants of a proposition, or colapses the proposition into the boolean value it is dominated to. (applies Neutral and Domination boolean rules).
+removeConstants ::  Proposition -> Proposition
+removeConstants     proposition =   
+    let
+        withoutNeutrals = removeNeutrals proposition
+    in  
+        if hasConstants withoutNeutrals
+        then Constant (findDomination proposition (vars proposition) (gen_bools proposition))
+        else withoutNeutrals
+
+-- Removes the neutral constants contained in a proposition.
+removeNeutrals ::   Proposition                                 ->  Proposition
+removeNeutrals      (Conjunction proposition (Constant True))   =   removeNeutrals proposition
+removeNeutrals      (Disjunction proposition (Constant False))  =   removeNeutrals proposition
+removeNeutrals      (Conjunction (Constant True) proposition )  =   removeNeutrals proposition
+removeNeutrals      (Disjunction (Constant False) proposition ) =   removeNeutrals proposition
+
+removeNeutrals      (Conjunction proposition1 proposition2 )    =   (Conjunction (removeNeutrals proposition1) (removeNeutrals proposition2) )
+removeNeutrals      (Disjunction proposition1 proposition2 )    =   (Disjunction (removeNeutrals proposition1) (removeNeutrals proposition2) )
+removeNeutrals      (Negation proposition)                      =   (Negation (removeNeutrals proposition))
+
+removeNeutrals      (Constant bool)                             =   (Constant bool)
+removeNeutrals      (Variable string)                           =   (Variable string)
+
+-- Colapses a proposition into its domination boolean value.
+findDomination ::   Proposition ->  [String] -> [[Bool]]                        ->  Bool
+findDomination      proposition     variables   []                              =   True
+findDomination      proposition     variables   (boolCombination:restBoolCombs) = 
+    let
+        assignment  =   as_vals variables boolCombination
+        evaluation  =   evalProp proposition assignment
+    in
+        case evaluation of
+            (True)  -> findDomination proposition variables restBoolCombs
+            (False) -> False
+
+hasConstants :: Proposition                 -> Bool
+hasConstants    (Constant _)                 = True
+hasConstants    (Variable _)                 = False
+hasConstants    (Disjunction prop1 prop2)    = False || hasConstants prop1 || hasConstants prop2
+hasConstants    (Conjunction prop1 prop2)    = False || hasConstants prop1 || hasConstants prop2
+hasConstants    (Equivalence prop1 prop2)    = False || hasConstants prop1 || hasConstants prop2
+hasConstants    (Implication prop1 prop2)    = False || hasConstants prop1 || hasConstants prop2
+hasConstants    (Negation prop)              = False || hasConstants prop
 
 {-
     VARS
@@ -250,6 +318,7 @@ evalProp    proposition     assignment          =
         - evalProp
         - bonita
         - printAssignment
+        - isTaut
 -}
 
 -- 
@@ -272,12 +341,40 @@ taut    proposition =
     in
         case isTaut possibleValues of
             (ItIs)              -> bonita proposition ++ ": es una tautologia :)"
-            (ItsNot assignment) -> bonita proposition ++ ": no es una tautologia :( Culpa de: ["++ printAssignment assignment++"].. como minimo."
+            (ItsNot assignment) -> bonita proposition ++ ": no es una tautologia :( Culpa de: ["++printAssignment assignment++"].. como minimo."
 
 {-
--- Finds the disjunctive normal form of a given proposition
-fnd :: Proposition -> Proposition
+
+    FND
+    Finds the disjunctive normal form of a given proposition
+
+    Auxiliar functions:
+        - exhaustiveNegate
+        - removeConstants
+
 -}
+
+fnd ::  Proposition ->   Proposition
+fnd     proposition =
+    let
+        clean ::  Proposition                   -> Proposition
+        clean     (Implication prop1 prop2)     =   (Disjunction (clean (Negation  prop1)) (clean prop2))
+        clean     (Equivalence prop1 prop2)     =   (Disjunction (Conjunction (clean prop1) (clean prop2) ) (clean (Negation prop2)))
+        clean     (Conjunction prop1 prop2)     =   (Conjunction (clean prop1) (clean prop2))
+        clean     (Disjunction prop1 prop2)     =   (Disjunction (clean prop1) (clean prop2) )
+        clean     (Constant bool)               =   (Constant bool)
+        clean     (Variable string)             =   (Variable string)
+        clean     (Negation prop)               =   (
+                                                    if isVariable prop 
+                                                    then (Negation prop) 
+                                                    else clean (exhaustiveNegate prop)
+                                                    )
+    in
+        removeConstants (clean proposition)
+
+
+    
+                      
 
 {-
     BONITA
@@ -302,8 +399,8 @@ bonita      proposition =
         in
             (
                 case proposition of
-                (Constant True)     -> "~"++string
-                (Constant False)    -> "~"++string
+                (Constant True)     -> "False"
+                (Constant False)    -> "True"
                 (Variable string)   -> "~"++string
                 (_)                 -> "~("++string++")"
             )

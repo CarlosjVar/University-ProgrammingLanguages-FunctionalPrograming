@@ -1,0 +1,44 @@
+A continuación, se presentan una serie de comandos, entradas y salidas de cada una de las funciones programadas con el fin de demostrar su buen funcionamiento.
+Aqui se trata de probar tanto las excepciones como los casos límite de cada una de ellas, para poder ver con presición que todo esta funcionando de la manera indicada.
+Para correrlos, se debe ingresar a la consola de haskell, el grupo los probó: con GHCi versión 8.10.2. Cargando la consola de la siguiente manera, en el ambiente que contenga los archivos del proyecto:
+
+~/SymbolicProcessing> ghci src/SymbolicProcessing
+
+
+( Negation ( Conjunction ( Disjunction ( Implication ( Negation ( Variable "a" ) ) ( Variable "b" ) ) ( Constant False ) ) (Equivalence ( Variable "a" ) ( Variable "c" ) ) ) )
+( Implication (Conjunction (Variable "p")(Variable "q")) (Variable "p"))
+
+
+VARIABLES
+["a","b","c"]
+
+POSSIBLES VALUES EXAMPLE
+[False,True,True]
+
+ASSIGNMENTS EXAMPLE
+[("a",False),("b",True),("c",True)]
+
+función: vars
+
+prueba 1: propocisión sin variables repetidas
+
+Entrada: 
+( Negation ( Conjunction ( Disjunction ( Implication ( Negation ( Variable "a" ) ) ( Variable "b" ) ) ( Constant False ) ) (Equivalence ( Variable "d" ) ( Variable "c" ) ) ) )
+
+Comando:
+vars ( Negation ( Conjunction ( Disjunction ( Implication ( Negation ( Variable "a" ) ) ( Variable "b" ) ) ( Constant False ) ) (Equivalence ( Variable "d" ) ( Variable "c" ) ) ) )
+
+Salida:
+["a","b","d","c"]
+
+prueba 2: propocisión con variables repetidas
+
+Entrada: 
+( Implication (Conjunction (Variable "p")(Variable "q")) (Variable "p"))
+
+Comando:
+vars ( Implication (Conjunction (Variable "p")(Variable "q")) (Variable "p"))
+
+
+Salida:
+["p","q"]
